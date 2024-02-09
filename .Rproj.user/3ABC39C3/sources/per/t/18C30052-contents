@@ -1,0 +1,65 @@
+#
+# This is a Shiny web application. You can run the application by clicking
+# the 'Run App' button above.
+#
+# Find out more about building applications with Shiny here:
+#
+#    https://shiny.posit.co/
+#
+# Load libraries
+library(leaflet)
+library(data.table)
+library(shiny)
+library(DT)
+library(shinythemes)
+library(lubridate)
+library(ChurnPrediction)
+
+data_cust <- fread("data_customer.csv")
+data_pers <- fread("data_personal.csv")
+
+data_merge <- merge(data_cust, data_pers, by = "CustomerId")
+
+data_merge$Gender <- as.factor(data_merge$Gender)
+data_merge$Exited <- as.factor(data_merge$Exited)
+
+top_100 <- data_merge[order(data_merge$prediction, decreasing = TRUE)][1:100]
+zips <- as.matrix(data_merge[1:100, list(zip_longitude, zip_latitude)])
+
+# Define UI for application that draws a histogram
+ui <- fluidPage(
+
+    # Application title
+    titlePanel("Customer Churn"),
+
+    # Sidebar with a slider input for number of bins
+    sidebarLayout(
+        sidebarPanel(
+          numericInput("cust_id", label = h3("Numeric input"), value = 1),
+          hr(),
+          fluidRow(column(10, verbatimTextOutput("prob")))
+        ),
+
+        # Show a plot of the generated distribution
+        mainPanel(
+          leafletOutput("map")
+        )
+    )
+)
+
+server <- function(input, output) {
+    customerId <- reactive({ input$cust_id })
+    output$prob <- renderText({
+      churnPrediction(data_merge, customerId())
+    })
+    output$map <- output$mymap <- renderLeaflet({
+      map <- leaflet();
+      map <- addTiles(map);
+      map <- addMarkers(map, data = zips, clusterOptions = markerClusterOptions());
+      map <- setView(map, lat= 43, lng= -79, zoom = 3); # North America
+      map
+    })
+}
+
+# Run the application
+shinyApp(ui = ui, server = server)
